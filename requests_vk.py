@@ -1,112 +1,110 @@
-from random import randrange
 import vk_api
-from vk_api.longpoll import VkLongPoll, VkEventType
+from config import user_token
+from pprint import pprint
+from vk_api.exceptions import ApiError
 from datetime import datetime
-# from pprint import pprint as print
 
 
-with open("config.txt", "r") as file_object:
-    token_group = file_object.readline().strip()
-    token_user = file_object.readline().strip()
-
-token = token_group
-user_token = token_user
-vk = vk_api.VkApi(token=token)
-vk_user = vk_api.VkApi(token=token_user)
-longpoll = VkLongPoll(vk)
+class VKapi:
+    def __init__(self, token):
+        self.vkapi_user = vk_api.VkApi(token=token)
 
 
-def write_msg(user_id, message):
-    vk.method('messages.send', {'user_id': user_id, 'message': message,  'random_id': randrange(10 ** 7),})
-
-
-def get_user_info(user_id):
-    user_info = {}
-    res = vk_user.method("users.get", {
-        "users_ids": user_id,
-        "fields": "first_name, last_name, bdate, city, sex"
-    })
-    if res:
-        for key, value in res[0].items():
-            if key == "city":
-                user_info[key] = value["id"]
-            else:
-                user_info[key] = value
-    else:
-        write_msg(user_info["id"], "Непредвиденная ошибка")
-        return None
-    return user_info
-
-
-def convert_city_name_into_city_id(city_name: str, user_info):
-    res = vk_user.method("database.getCities",
-                         {"country_ids": 1,
-                          "q": city_name,
-                          "need_all": 0,
-                          "count": 10
-                          })
-    if res:
-        city_id = res.get('items')[0]["id"]
-        return city_id
-    else:
-        write_msg(user_info["id"], 'Ошибка ввода города')
-        return None
-
-
-def get_city_id(user_info):
-    if user_info:
-        if user_info.get("city"):
-            user_city_id = user_info["city"]
-            return user_city_id
+    def bdate_to_yaer(self, bdate):
+        if bdate is not None:
+            user_year = bdate.split(".")[-1]
+            year_now = datetime.now().year
+            result = year_now - int(user_year)
+            return result
         else:
-            write_msg(user_info["id"], "Введите название вашего города: ")
-            for event in longpoll.listen():
-                if event.type == VkEventType.MESSAGE_NEW:
-                    if event.to_me:
-                        city_id = convert_city_name_into_city_id(event.text, user_info)
-                        user_info["city"] = city_id
-                        user_city_id = user_info["city"]
-                        return user_city_id
-    else:
-        write_msg(user_info["id"], "Непредвиденная ошибка!")
-        return None
+            return None
 
 
-def get_sex(user_info):
-    if user_info:
-        sex = user_info["sex"]
-        return sex
-    else:
-        write_msg(user_info["id"], "Непредвиденная ошибка!")
-        return None
+
+    def get_user_info(self, user_id):
+        try:
+            resp, = self.vkapi_user.method("users.get",
+                                      {
+                                          "user_ids": user_id,
+                                          "fields": "bdate, city, sex"
+                                      }
+                                      )
+
+        except ApiError as error:
+            resp = {}
+            print(f"Error = {error}")
+
+        result = {
+                    "name": resp["first_name"] + " " + resp["last_name"]
+                    if "last_name" in resp and "last_name" in resp else None,
+                    "sex": resp.get("sex"),
+                    "city": resp.get("city")["title"] if resp.get("city") is not None else None,
+                    "year": self.bdate_to_yaer(resp.get("bdate")) if resp.get("bdate") is not None else None
+        }
+
+        return result
 
 
-def get_bdate_year(user_info):
-    if user_info["bdate"]:
-        if len(user_info["bdate"].split(".")) == 3:
-            bdate_year = user_info["bdate"].split(".")[-1]
-            return bdate_year
-        else:
-            write_msg(user_info["id"], "Введите год вашего рождения в формате 'YYYY': ")
-            for event in longpoll.listen():
-                if event.type == VkEventType.MESSAGE_NEW and event.to_me:
-                    user_info["bdate"] = event.text
-                    bdate_year = user_info["bdate"]
-                    return bdate_year
-    else:
-        write_msg(user_info["id"], "Непредвиденная ошибка!")
-        return None
+    def search_worksheet(self, params, offset):
+        try:
+            users = self.vkapi_user.method("users.search",
+                                      {
+                                          "count": 50,
+                                          "offset": offset,
+                                          "hometown": params["city"],
+                                          "sex": 1 if params["sex"] == 2 else 2,
+                                          "has_photo": 1,
+                                          "age_from": params["year"] - 3,
+                                          "age_to": params["year"] + 3
+                                      }
+                                      )
+
+        except ApiError as error:
+            users = []
+            print(f"Error = {error}")
+
+        result = [
+            {
+                "name": item["first_name"] + " " + item["last_name"],
+                "id": item["id"]
+            } for item in users['items'] if item["is_closed"] is False
+        ]
+
+        return result
 
 
-def users_search(user_info):
-    res = vk_user.method("users.search", {
-        "age_from": (datetime.now().date().year - int(get_bdate_year(get_user_info(user_info["id"])))) - 3,
-        "age_to": (datetime.now().date().year - int(get_bdate_year(get_user_info(user_info["id"])))) + 3,
-        "sex": 3 - get_sex(get_user_info(user_info["id"])),
-        "status": 6,
-        "city": get_city_id(get_user_info(user_info["id"])),
-        "count": 5,
-        "has_photo": 1,
-    })
-    return res["items"]
+    def get_users_photo(self, id):
+        try:
+            photos = self.vkapi_user.method("photos.get",
+                                      {
+                                          "owner_id": id,
+                                          "album_id": "profile",
+                                          "extended": 1
+                                      }
+                                      )
 
+        except ApiError as error:
+            photos = {}
+            print(f"Error = {error}")
+
+        result = [
+            {
+                "owner_id": item["owner_id"],
+                "id": item["id"],
+                "likes": item["likes"]["count"],
+                "comments": item["comments"]["count"]
+            } for item in photos["items"]
+        ]
+
+        return result[0:2]
+
+
+if __name__ == "__main__":
+    user_id = 4417214
+    vkapi_user = VKapi(user_token)
+    params = vkapi_user.get_user_info(user_id)
+    worksheets = vkapi_user.search_worksheet(params, 0)
+    worksheet = worksheets.pop()
+    photos = vkapi_user.get_users_photo(worksheet["id"])
+
+    pprint(params)

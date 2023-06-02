@@ -1,30 +1,78 @@
-from requests_vk import *
 import vk_api
 from vk_api.longpoll import VkLongPoll, VkEventType
-
-with open("config.txt", "r") as file_object:
-    token_group = file_object.readline().strip()
-    token_user = file_object.readline().strip()
-
-token = token_group
-user_token = token_user
-vk = vk_api.VkApi(token=token)
-vk_user = vk_api.VkApi(token=token_user)
-longpoll = VkLongPoll(vk)
+from vk_api.utils import get_random_id
+from config import group_token, user_token
+from requests_vk import VKapi
 
 
-for event in longpoll.listen():
-    if event.type == VkEventType.MESSAGE_NEW:
+class VKBot:
+    def __init__(self, group_token, user_token):
+        self.vk_group = vk_api.VkApi(group_token)
+        self.longpoll = VkLongPoll(self.vk_group)
+        self.vk_user = VKapi(user_token)
+        self.params = {}
+        self.worksheets = []
+        self.offset = 0
 
-        if event.to_me:
-            request = event.text.lower()
 
-            if request == "привет":
-                message = users_search(get_user_info(event.user_id))
-                write_msg(user_id=event.user_id, message=message)
+    def write_msg(self, user_id, message, attachment=None):
+        self.vk_group.method('messages.send',
+                        {
+                            'user_id': user_id,
+                            'message': message,
+                            'attachment': attachment,
+                            'random_id': get_random_id()
+                        }
+                        )
 
-            elif request == "пока":
-                write_msg(event.user_id, "Пока((")
 
-            else:
-                write_msg(event.user_id, "Не поняла вашего ответа...")
+    def event_handler(self):
+
+        for event in self.longpoll.listen():
+            if event.type == VkEventType.MESSAGE_NEW and event.to_me:
+                request = event.text.lower()
+                user_id = event.user_id
+
+                if request == "привет":
+                    self.params = self.vkapi.get_user_info(event.user_id)
+                    self.write_msg(user_id=user_id, message=f"Привет, {self.params['name']}!")
+
+                elif request == "поиск":
+                    self.write_msg(user_id=user_id, message="Начинаю поиск анкет")
+
+                    if self.worksheets:
+                        worksheet = self.worksheets.pop()
+                        photos = self.vkapi.get_users_photo(worksheet["id"])
+                        photo_string = ""
+                        for photo in photos:
+                            photo_string += f"photo{photo['owner_id']}_{photo['id']}"
+
+                    else:
+                        self.worksheets = self.vkapi.search_worksheet(self.params, self.offset)
+                        worksheet = self.worksheets.pop()
+                        photos = self.vkapi.get_users_photo(worksheet["id"])
+                        photo_string = ""
+                        for photo in photos:
+                            photo_string += f"photo{photo['owner_id']}_{photo['id']}"
+                        self.offset += 50
+
+                    self.write_msg(user_id=user_id,
+                                   message=f"Имя: {worksheet['name']}, ссылка VK: vk.com/{worksheet['id']}",
+                                   attachment=photo_string
+                                   )
+
+                elif request == "пока":
+                    self.write_msg(user_id=user_id, message="Пока((")
+
+                elif request == "проверка":
+                    message = str(self.vkapi.get_user_info(event.user_id))
+                    self.write_msg(user_id=user_id, message=message)
+
+                else:
+                    self.write_msg(user_id=user_id, message="Не поняла вашего ответа...")
+
+
+if __name__ == "__main__":
+    VKBot = VKBot(group_token, user_token)
+    VKBot.event_handler()
+
