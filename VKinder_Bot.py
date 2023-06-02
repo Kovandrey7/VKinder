@@ -5,11 +5,11 @@ from config import group_token, user_token
 from requests_vk import VKapi
 
 
-class VKBot:
+class VKBot():
     def __init__(self, group_token, user_token):
-        self.vk_group = vk_api.VkApi(group_token)
+        self.vk_group = vk_api.VkApi(token=group_token)
         self.longpoll = VkLongPoll(self.vk_group)
-        self.vk_user = VKapi(user_token)
+        self.vkapi = VKapi(user_token)
         self.params = {}
         self.worksheets = []
         self.offset = 0

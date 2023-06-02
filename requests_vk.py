@@ -7,23 +7,19 @@ from datetime import datetime
 
 class VKapi:
     def __init__(self, token):
-        self.vkapi_user = vk_api.VkApi(token=token)
+        self.vkapi = vk_api.VkApi(token=token)
 
 
     def bdate_to_yaer(self, bdate):
-        if bdate is not None:
-            user_year = bdate.split(".")[-1]
-            year_now = datetime.now().year
-            result = year_now - int(user_year)
-            return result
-        else:
-            return None
-
+        user_year = bdate.split(".")[-1]
+        year_now = datetime.now().year
+        result = year_now - int(user_year)
+        return result
 
 
     def get_user_info(self, user_id):
         try:
-            resp, = self.vkapi_user.method("users.get",
+            resp, = self.vkapi.method("users.get",
                                       {
                                           "user_ids": user_id,
                                           "fields": "bdate, city, sex"
@@ -39,7 +35,7 @@ class VKapi:
                     if "last_name" in resp and "last_name" in resp else None,
                     "sex": resp.get("sex"),
                     "city": resp.get("city")["title"] if resp.get("city") is not None else None,
-                    "year": self.bdate_to_yaer(resp.get("bdate")) if resp.get("bdate") is not None else None
+                    "year": self.bdate_to_yaer(resp.get("bdate"))
         }
 
         return result
@@ -47,7 +43,7 @@ class VKapi:
 
     def search_worksheet(self, params, offset):
         try:
-            users = self.vkapi_user.method("users.search",
+            users = self.vkapi.method("users.search",
                                       {
                                           "count": 50,
                                           "offset": offset,
@@ -75,7 +71,7 @@ class VKapi:
 
     def get_users_photo(self, id):
         try:
-            photos = self.vkapi_user.method("photos.get",
+            photos = self.vkapi.method("photos.get",
                                       {
                                           "owner_id": id,
                                           "album_id": "profile",
@@ -101,10 +97,13 @@ class VKapi:
 
 if __name__ == "__main__":
     user_id = 4417214
-    vkapi_user = VKapi(user_token)
-    params = vkapi_user.get_user_info(user_id)
-    worksheets = vkapi_user.search_worksheet(params, 0)
+    vkapi = VKapi(user_token)
+    params = vkapi.get_user_info(user_id)
+    worksheets = vkapi.search_worksheet(params, 0)
     worksheet = worksheets.pop()
-    photos = vkapi_user.get_users_photo(worksheet["id"])
+    photos = vkapi.get_users_photo(worksheet["id"])
 
     pprint(params)
+    print(worksheets)
+    print(worksheet)
+    print(photos)
