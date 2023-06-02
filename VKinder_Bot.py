@@ -57,7 +57,7 @@ class VKBot():
                         self.offset += 50
 
                     self.write_msg(user_id=user_id,
-                                   message=f"Имя: {worksheet['name']}, ссылка VK: vk.com/{worksheet['id']}",
+                                   message=f"Имя: {worksheet['name']}, ссылка VK: vk.com/id{worksheet['id']}",
                                    attachment=photo_string
                                    )
 
