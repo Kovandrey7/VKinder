@@ -3,6 +3,8 @@ from vk_api.longpoll import VkLongPoll, VkEventType
 from vk_api.utils import get_random_id
 from config import group_token, user_token
 from requests_vk import VKapi
+from database import *
+
 
 
 class VKBot:
@@ -35,6 +37,8 @@ class VKBot:
         return photo_string
 
     def event_handler(self):
+        check_and_create_database(db_url_object)
+        Base.metadata.create_all(engine)
 
         for event in self.longpoll.listen():
             if event.type == VkEventType.MESSAGE_NEW and event.to_me:
@@ -66,6 +70,12 @@ class VKBot:
                     else:
                         self.worksheets = self.vkapi.search_worksheet(self.params, self.offset)
                         worksheet = self.worksheets.pop()
+                        while check_user(engine, event.user_id, worksheet["id"]):
+                            if self.worksheets:
+                                worksheet = self.worksheets.pop()
+                            else:
+                                self.worksheets = self.vkapi.search_worksheet(self.params, self.offset)
+                                worksheet = self.worksheets.pop()
                         attachment = self.get_photo_string(worksheet)
                         self.offset += 50
 
@@ -73,6 +83,8 @@ class VKBot:
                                    message=f"Имя: {worksheet['name']}, ссылка VK: vk.com/id{worksheet['id']}",
                                    attachment=attachment
                                    )
+
+                    add_user(engine, event.user_id, worksheet["id"])
 
                 elif request == "пока":
                     self.write_msg(user_id=user_id, message="Пока((")
