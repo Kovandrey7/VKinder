@@ -5,7 +5,7 @@ from config import group_token, user_token
 from requests_vk import VKapi
 
 
-class VKBot():
+class VKBot:
     def __init__(self, group_token, user_token):
         self.vk_group = vk_api.VkApi(token=group_token)
         self.longpoll = VkLongPoll(self.vk_group)
@@ -26,6 +26,14 @@ class VKBot():
                         )
 
 
+    def get_photo_string(self, worksheet):
+        photos = self.vkapi.get_users_photo(worksheet["id"])
+        photo_string = ""
+        for photo in photos:
+            photo_string += f"photo{photo['owner_id']}_{photo['id']},"
+
+        return photo_string
+
     def event_handler(self):
 
         for event in self.longpoll.listen():
@@ -35,38 +43,39 @@ class VKBot():
 
                 if request == "привет":
                     self.params = self.vkapi.get_user_info(event.user_id)
-                    self.write_msg(user_id=user_id, message=f"Привет, {self.params['name']}!")
+                    if self.params["city"]:
+                        self.write_msg(user_id=user_id, message=f"Привет, {self.params['name']}!")
+                    else:
+                        self.write_msg(user_id=user_id, message=f"Привет, {self.params['name']}!")
+                        self.write_msg(user_id=user_id,
+                                       message="Для корректной работы введите название вашего города:")
+                        for event in self.longpoll.listen():
+                            if event.type == VkEventType.MESSAGE_NEW and event.to_me:
+                                city = event.text.title()
+                                self.params["city"] = city
+                                self.write_msg(user_id=user_id,
+                                               message="Отлично! Напишите в чате 'поиск' для подбора анкет: ")
+                                break
 
                 elif request == "поиск":
                     self.write_msg(user_id=user_id, message="Начинаю поиск анкет")
 
                     if self.worksheets:
                         worksheet = self.worksheets.pop()
-                        photos = self.vkapi.get_users_photo(worksheet["id"])
-                        photo_string = ""
-                        for photo in photos:
-                            photo_string += f"photo{photo['owner_id']}_{photo['id']}"
-
+                        attachment = self.get_photo_string(worksheet)
                     else:
                         self.worksheets = self.vkapi.search_worksheet(self.params, self.offset)
                         worksheet = self.worksheets.pop()
-                        photos = self.vkapi.get_users_photo(worksheet["id"])
-                        photo_string = ""
-                        for photo in photos:
-                            photo_string += f"photo{photo['owner_id']}_{photo['id']}"
+                        attachment = self.get_photo_string(worksheet)
                         self.offset += 50
 
                     self.write_msg(user_id=user_id,
                                    message=f"Имя: {worksheet['name']}, ссылка VK: vk.com/id{worksheet['id']}",
-                                   attachment=photo_string
+                                   attachment=attachment
                                    )
 
                 elif request == "пока":
                     self.write_msg(user_id=user_id, message="Пока((")
-
-                elif request == "проверка":
-                    message = str(self.vkapi.get_user_info(event.user_id))
-                    self.write_msg(user_id=user_id, message=message)
 
                 else:
                     self.write_msg(user_id=user_id, message="Не поняла вашего ответа...")

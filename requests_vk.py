@@ -1,13 +1,13 @@
 import vk_api
-from config import user_token
+from config import user_token, group_token
 from pprint import pprint
 from vk_api.exceptions import ApiError
 from datetime import datetime
 
 
 class VKapi:
-    def __init__(self, token):
-        self.vkapi = vk_api.VkApi(token=token)
+    def __init__(self, user_token):
+        self.vkapi_user = vk_api.VkApi(token=user_token)
 
 
     def bdate_to_yaer(self, bdate):
@@ -19,7 +19,7 @@ class VKapi:
 
     def get_user_info(self, user_id):
         try:
-            resp, = self.vkapi.method("users.get",
+            resp, = self.vkapi_user.method("users.get",
                                       {
                                           "user_ids": user_id,
                                           "fields": "bdate, city, sex"
@@ -43,7 +43,7 @@ class VKapi:
 
     def search_worksheet(self, params, offset):
         try:
-            users = self.vkapi.method("users.search",
+            users = self.vkapi_user.method("users.search",
                                       {
                                           "count": 50,
                                           "offset": offset,
@@ -51,7 +51,8 @@ class VKapi:
                                           "sex": 1 if params["sex"] == 2 else 2,
                                           "has_photo": 1,
                                           "age_from": params["year"] - 3,
-                                          "age_to": params["year"] + 3
+                                          "age_to": params["year"] + 3,
+                                          "status": 6
                                       }
                                       )
 
@@ -71,7 +72,7 @@ class VKapi:
 
     def get_users_photo(self, id):
         try:
-            photos = self.vkapi.method("photos.get",
+            photos = self.vkapi_user.method("photos.get",
                                       {
                                           "owner_id": id,
                                           "album_id": "profile",
@@ -91,8 +92,8 @@ class VKapi:
                 "comments": item["comments"]["count"]
             } for item in photos["items"]
         ]
-
-        return result[0:2]
+        result.sort(key=lambda x: x["likes"] + x["comments"], reverse=True)
+        return result[0:3]
 
 
 if __name__ == "__main__":
@@ -103,7 +104,7 @@ if __name__ == "__main__":
     worksheet = worksheets.pop()
     photos = vkapi.get_users_photo(worksheet["id"])
 
-    pprint(params)
-    print(worksheets)
-    print(worksheet)
-    print(photos)
+    # pprint(params)
+    # pprint(worksheets)
+    # pprint(worksheet)
+    pprint(photos)
