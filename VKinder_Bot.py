@@ -74,6 +74,7 @@ class VKBot:
                             if self.worksheets:
                                 worksheet = self.worksheets.pop()
                             else:
+                                self.offset += 50
                                 self.worksheets = self.vkapi.search_worksheet(self.params, self.offset)
                                 worksheet = self.worksheets.pop()
                         attachment = self.get_photo_string(worksheet)
@@ -90,7 +91,7 @@ class VKBot:
                     self.write_msg(user_id=user_id, message="Пока((")
 
                 else:
-                    self.write_msg(user_id=user_id, message="Не поняла вашего ответа...")
+                    self.write_msg(user_id=user_id, message="Не поняла вашего сообщения...")
 
 
 if __name__ == "__main__":

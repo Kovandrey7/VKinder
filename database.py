@@ -1,7 +1,7 @@
 import sqlalchemy as sq
 from sqlalchemy.orm import declarative_base, Session
 from sqlalchemy import create_engine, MetaData
-from sqlalchemy_utils import database_exists, create_database
+from sqlalchemy_utils import database_exists, create_database, drop_database
 from config import db_url_object
 
 
@@ -39,6 +39,7 @@ def check_user(engine, profile_id, worksheet_id):
 
 if __name__ == '__main__':
     pass
+    # drop_database(db_url_object)
     # engine = create_engine(db_url_object)
     # Base.metadata.create_all(engine)
     # # add_user(engine, 2113, 124512)
