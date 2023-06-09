@@ -1,5 +1,6 @@
 import vk_api
 from vk_api.longpoll import VkLongPoll, VkEventType
+from vk_api.keyboard import VkKeyboard
 from vk_api.utils import get_random_id
 from config import group_token, user_token
 from requests_vk import VKapi
@@ -17,15 +18,14 @@ class VKBot:
         self.offset = 0
 
 
-    def write_msg(self, user_id, message, attachment=None):
-        self.vk_group.method('messages.send',
-                        {
-                            'user_id': user_id,
-                            'message': message,
-                            'attachment': attachment,
-                            'random_id': get_random_id()
-                        }
-                        )
+    def write_msg(self, user_id, message, attachment=None, keyboard=None):
+        param = {'user_id': user_id,
+                 'message': message,
+                 'attachment': attachment,
+                 'random_id': get_random_id(),
+                 'keyboard': keyboard.get_keyboard() if keyboard is not None else None
+                 }
+        self.vk_group.method('messages.send', param)
 
 
     def get_photo_string(self, worksheet):
@@ -47,10 +47,16 @@ class VKBot:
 
                 if request == "привет":
                     self.params = self.vkapi.get_user_info(event.user_id)
+                    keyboard = VkKeyboard()
+                    keyboard.add_button("Начать")
+                    keyboard.add_button("Завершить")
+                    self.write_msg(user_id=user_id, message=f"Привет, {self.params['name']}!", keyboard=keyboard)
+
+                elif request == "начать":
                     if self.params["city"]:
-                        self.write_msg(user_id=user_id, message=f"Привет, {self.params['name']}!")
+                        self.write_msg(user_id=user_id,
+                                       message="Напишите в чате 'поиск' для подбора анкет: ")
                     else:
-                        self.write_msg(user_id=user_id, message=f"Привет, {self.params['name']}!")
                         self.write_msg(user_id=user_id,
                                        message="Для корректной работы введите название вашего города:")
                         for event in self.longpoll.listen():
@@ -84,14 +90,18 @@ class VKBot:
                                    message=f"Имя: {worksheet['name']}, ссылка VK: vk.com/id{worksheet['id']}",
                                    attachment=attachment
                                    )
+                    self.write_msg(user_id=user_id,
+                                   message="Напишите в чате 'поиск' для продолжения: ")
 
                     add_user(engine, event.user_id, worksheet["id"])
+
 
                 elif request == "пока":
                     self.write_msg(user_id=user_id, message="Пока((")
 
                 else:
-                    self.write_msg(user_id=user_id, message="Не поняла вашего сообщения...")
+                    self.write_msg(user_id=user_id,
+                                   message="Не поняла вашего сообщения...Напишите в чат 'привет' для начала работы: ")
 
 
 if __name__ == "__main__":
