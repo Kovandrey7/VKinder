@@ -1,10 +1,10 @@
 import vk_api
 from vk_api.longpoll import VkLongPoll, VkEventType
-from vk_api.keyboard import VkKeyboard
 from vk_api.utils import get_random_id
 from config import group_token, user_token
 from requests_vk import VKapi
 from database import *
+from button import start_button, search_button, start_over, greetings
 
 
 
@@ -16,6 +16,11 @@ class VKBot:
         self.params = {}
         self.worksheets = []
         self.offset = 0
+        self.start_dialog = True
+        self.start_button = start_button()
+        self.search_button = search_button()
+        self.start_over = start_over()
+        self.greetings = greetings()
 
 
     def write_msg(self, user_id, message, attachment=None, keyboard=None):
@@ -36,6 +41,19 @@ class VKBot:
 
         return photo_string
 
+
+    def check_worksheet(self, event):
+        worksheet = self.worksheets.pop()
+        while check_user(engine, event.user_id, worksheet["id"]):
+            if self.worksheets:
+                worksheet = self.worksheets.pop()
+            else:
+                self.offset += 50
+                self.worksheets = self.vkapi.search_worksheet(self.params, self.offset)
+                worksheet = self.worksheets.pop()
+        return worksheet
+
+
     def event_handler(self):
         check_and_create_database(db_url_object)
         Base.metadata.create_all(engine)
@@ -45,44 +63,44 @@ class VKBot:
                 request = event.text.lower()
                 user_id = event.user_id
 
-                if request == "привет":
+                if self.start_dialog and (request == "привет" or request == "начать сначала!"):
                     self.params = self.vkapi.get_user_info(event.user_id)
-                    keyboard = VkKeyboard()
-                    keyboard.add_button("Начать")
-                    keyboard.add_button("Завершить")
-                    self.write_msg(user_id=user_id, message=f"Привет, {self.params['name']}!", keyboard=keyboard)
+                    keyboard = self.start_button
+                    self.write_msg(user_id=user_id,
+                                   message=f"Привет, {self.params['name']}!\n "
+                                           f"Для начала работы выбери нужную кнопку!",
+                                   keyboard=keyboard)
+                    self.start_dialog = False
 
-                elif request == "начать":
+                elif self.start_dialog is False and request == "начать":
                     if self.params["city"]:
+                        keyboard = self.search_button
                         self.write_msg(user_id=user_id,
-                                       message="Напишите в чате 'поиск' для подбора анкет: ")
+                                       message="Нажми конпку 'Поиск' для подбора анкет",
+                                       keyboard=keyboard)
                     else:
                         self.write_msg(user_id=user_id,
-                                       message="Для корректной работы введите название вашего города:")
+                                       message="Для корректной работы напиши название своего города:")
                         for event in self.longpoll.listen():
                             if event.type == VkEventType.MESSAGE_NEW and event.to_me:
                                 city = event.text.title()
                                 self.params["city"] = city
+                                keyboard = self.search_button
                                 self.write_msg(user_id=user_id,
-                                               message="Отлично! Напишите в чате 'поиск' для подбора анкет: ")
+                                               message="Отлично! Напиши в чате 'поиск' для подбора анкет.",
+                                               keyboard=keyboard)
                                 break
+                    self.start_dialog = False
 
-                elif request == "поиск":
+                elif self.start_dialog is False and request == "поиск":
                     self.write_msg(user_id=user_id, message="Начинаю поиск анкет")
 
                     if self.worksheets:
-                        worksheet = self.worksheets.pop()
+                        worksheet = self.check_worksheet(event)
                         attachment = self.get_photo_string(worksheet)
                     else:
                         self.worksheets = self.vkapi.search_worksheet(self.params, self.offset)
-                        worksheet = self.worksheets.pop()
-                        while check_user(engine, event.user_id, worksheet["id"]):
-                            if self.worksheets:
-                                worksheet = self.worksheets.pop()
-                            else:
-                                self.offset += 50
-                                self.worksheets = self.vkapi.search_worksheet(self.params, self.offset)
-                                worksheet = self.worksheets.pop()
+                        worksheet = self.check_worksheet(event)
                         attachment = self.get_photo_string(worksheet)
                         self.offset += 50
 
@@ -90,18 +108,24 @@ class VKBot:
                                    message=f"Имя: {worksheet['name']}, ссылка VK: vk.com/id{worksheet['id']}",
                                    attachment=attachment
                                    )
-                    self.write_msg(user_id=user_id,
-                                   message="Напишите в чате 'поиск' для продолжения: ")
-
                     add_user(engine, event.user_id, worksheet["id"])
+                    self.write_msg(user_id=user_id,
+                                   message="Для продолжения выберите нужную кнопку")
+                    self.start_dialog = False
 
-
-                elif request == "пока":
-                    self.write_msg(user_id=user_id, message="Пока((")
+                elif self.start_dialog is False and request == "завершить":
+                    keyboard = self.start_over
+                    self.write_msg(user_id=user_id,
+                                   message="До новых встреч!",
+                                   keyboard=keyboard)
+                    self.start_dialog = True
 
                 else:
+                    keyboard = self.greetings
                     self.write_msg(user_id=user_id,
-                                   message="Не поняла вашего сообщения...Напишите в чат 'привет' для начала работы: ")
+                                   message="Не поняла вашего сообщения...Нажмите кнопку 'Привет' для начала работы",
+                                   keyboard=keyboard)
+                    self.start_dialog = True
 
 
 if __name__ == "__main__":
