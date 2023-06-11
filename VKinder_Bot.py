@@ -4,7 +4,7 @@ from vk_api.utils import get_random_id
 from config import group_token, user_token
 from requests_vk import VKapi
 from database import *
-from button import start_button, search_button, start_over, greetings
+from button import start_button, search_button, start_over_button, greetings_button, like_button, next_button
 
 
 
@@ -19,8 +19,11 @@ class VKBot:
         self.start_dialog = True
         self.start_button = start_button()
         self.search_button = search_button()
-        self.start_over = start_over()
-        self.greetings = greetings()
+        self.start_over_button = start_over_button()
+        self.greetings_button = greetings_button()
+        self.like_button = like_button()
+        self.next_button = next_button()
+        self.like = False
 
 
     def write_msg(self, user_id, message, attachment=None, keyboard=None):
@@ -35,6 +38,15 @@ class VKBot:
 
     def get_photo_string(self, worksheet):
         photos = self.vkapi.get_users_photo(worksheet["id"])
+        photo_string = ""
+        for photo in photos:
+            photo_string += f"photo{photo['owner_id']}_{photo['id']},"
+
+        return photo_string
+
+
+    def get_photo_string_for_likes(self, worksheet):
+        photos = self.vkapi.get_users_photo(worksheet)
         photo_string = ""
         for photo in photos:
             photo_string += f"photo{photo['owner_id']}_{photo['id']},"
@@ -68,32 +80,38 @@ class VKBot:
                     keyboard = self.start_button
                     self.write_msg(user_id=user_id,
                                    message=f"Привет, {self.params['name']}!\n "
-                                           f"Для начала работы выбери нужную кнопку!",
-                                   keyboard=keyboard)
+                                           f"Выбери нужное действие!",
+                                   keyboard=keyboard
+                                   )
                     self.start_dialog = False
 
-                elif self.start_dialog is False and request == "начать":
+                elif self.start_dialog is False and request == "начать работу бота":
                     if self.params["city"]:
                         keyboard = self.search_button
                         self.write_msg(user_id=user_id,
-                                       message="Нажми конпку 'Поиск' для подбора анкет",
-                                       keyboard=keyboard)
+                                       message="Выбери нужное действие!",
+                                       keyboard=keyboard
+                                       )
                     else:
                         self.write_msg(user_id=user_id,
-                                       message="Для корректной работы напиши название своего города:")
+                                       message="Для корректной работы напиши название своего города."
+                                       )
                         for event in self.longpoll.listen():
                             if event.type == VkEventType.MESSAGE_NEW and event.to_me:
                                 city = event.text.title()
                                 self.params["city"] = city
                                 keyboard = self.search_button
                                 self.write_msg(user_id=user_id,
-                                               message="Отлично! Напиши в чате 'поиск' для подбора анкет.",
-                                               keyboard=keyboard)
+                                               message="Отлично! Выбери нужное действие!",
+                                               keyboard=keyboard
+                                               )
                                 break
                     self.start_dialog = False
 
-                elif self.start_dialog is False and request == "поиск":
-                    self.write_msg(user_id=user_id, message="Начинаю поиск анкет")
+                elif self.start_dialog is False and (request == "поиск новых анкет" or request == "продолжить поиск"):
+                    self.write_msg(user_id=user_id,
+                                   message="Начинаю поиск анкет"
+                                   )
 
                     if self.worksheets:
                         worksheet = self.check_worksheet(event)
@@ -108,24 +126,116 @@ class VKBot:
                                    message=f"Имя: {worksheet['name']}, ссылка VK: vk.com/id{worksheet['id']}",
                                    attachment=attachment
                                    )
-                    add_user(engine, event.user_id, worksheet["id"])
+                    keyboard = self.like_button
                     self.write_msg(user_id=user_id,
-                                   message="Для продолжения выберите нужную кнопку")
+                                   message="Добавить анкету в избранное?",
+                                   keyboard=keyboard
+                                   )
+                    for event in self.longpoll.listen():
+                        if event.type == VkEventType.MESSAGE_NEW and event.to_me:
+                            request = event.text.lower()
+
+                            if request == "добавить анкету в избранное":
+                                self.like = True
+                                add_user(engine, event.user_id, worksheet["id"], like=self.like)
+                                self.write_msg(user_id=user_id,
+                                               message="Анкета добавлена в избранное"
+                                               )
+                                break
+                            elif request == "пропустить":
+                                add_user(engine, event.user_id, worksheet["id"])
+                                break
+                            else:
+                                self.write_msg(user_id=user_id,
+                                               message=f"Не понимаю команду, воспользуйтесь кнопками."
+                                               )
+                    keyboard = self.search_button
+                    self.write_msg(user_id=user_id,
+                                   message="Продолжить поиск?",
+                                   keyboard=keyboard)
                     self.start_dialog = False
 
-                elif self.start_dialog is False and request == "завершить":
-                    keyboard = self.start_over
+                elif self.start_dialog is False and request == "показать избранные анкеты":
+                    likes_list = get_likes_list(event.user_id)
+                    if likes_list:
+                        worksheet_id = likes_list.pop()
+                        attachment = self.get_photo_string_for_likes(worksheet_id)
+                        self.write_msg(user_id=user_id,
+                                       message=f"Cсылка VK: vk.com/id{worksheet_id}",
+                                       attachment=attachment
+                                       )
+                        keyboard = self.next_button
+                        self.write_msg(user_id=user_id,
+                                       message="Выбери нужное действие!",
+                                       keyboard=keyboard
+                                       )
+                        for event in self.longpoll.listen():
+                            if event.type == VkEventType.MESSAGE_NEW and event.to_me:
+                                request = event.text.lower()
+
+                                if request == "следующая избранная анкета":
+                                    if likes_list:
+                                        worksheet_id = likes_list.pop()
+                                        attachment = self.get_photo_string_for_likes(worksheet_id)
+                                        self.write_msg(user_id=user_id,
+                                                       message=f"Cсылка VK: vk.com/id{worksheet_id}",
+                                                       attachment=attachment, keyboard=keyboard
+                                                       )
+                                    else:
+                                        keyboard = self.search_button
+                                        self.write_msg(user_id=user_id,
+                                                       message=f"Избранные анкеты анкеты закончились.\n"
+                                                               f"Начать поиск новых анкет?",
+                                                       keyboard=keyboard
+                                                       )
+                                        break
+
+
+                                elif request == "закончить просмотр избранных анкет":
+                                    keyboard = self.search_button
+                                    self.write_msg(user_id=user_id,
+                                                    message="Выбери нужное действие!",
+                                                    keyboard=keyboard
+                                                   )
+                                    break
+
+                                else:
+                                    self.write_msg(user_id=user_id,
+                                                   message=f"Не понимаю команду, воспользуйтесь кнопками."
+                                                   )
+
+                    else:
+                        keyboard = self.search_button
+                        self.write_msg(user_id=user_id,
+                                       message="Отстутствуют избранные анкеты, для продолжения выбери нужное действие!",
+                                       keyboard=keyboard
+                                       )
+
+
+                elif request == "завершить":
+                    keyboard = self.start_over_button
                     self.write_msg(user_id=user_id,
                                    message="До новых встреч!",
-                                   keyboard=keyboard)
+                                   keyboard=keyboard
+                                   )
                     self.start_dialog = True
+                    keyboard = self.greetings_button
+                    self.write_msg(user_id=user_id,
+                                   message="Нажмите кнопку 'Привет' для начала работы",
+                                   keyboard=keyboard
+                                   )
 
                 else:
-                    keyboard = self.greetings
-                    self.write_msg(user_id=user_id,
-                                   message="Не поняла вашего сообщения...Нажмите кнопку 'Привет' для начала работы",
-                                   keyboard=keyboard)
-                    self.start_dialog = True
+                    if self.start_dialog:
+                        keyboard = self.start_over_button
+                        self.write_msg(user_id=user_id,
+                                       message="Не понимаю команду, воспользуйтесь кнопками.",
+                                       keyboard=keyboard
+                                       )
+                    else:
+                        self.write_msg(user_id=user_id,
+                                       message="Не понимаю команду, воспользуйтесь кнопками."
+                                       )
 
 
 if __name__ == "__main__":

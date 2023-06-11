@@ -14,6 +14,7 @@ class Viewed(Base):
     __tablename__ = 'viewed'
     profile_id = sq.Column(sq.Integer, primary_key=True)
     worksheet_id = sq.Column(sq.Integer, primary_key=True)
+    like = sq.Column(sq.Boolean(), default=False)
 
 
 def check_and_create_database(db_url):
@@ -21,9 +22,9 @@ def check_and_create_database(db_url):
         create_database(db_url)
 
 
-def add_user(engine, profile_id, worksheet_id):
+def add_user(engine, profile_id, worksheet_id, like=False):
     with Session(engine) as session:
-        to_bd = Viewed(profile_id=profile_id, worksheet_id=worksheet_id)
+        to_bd = Viewed(profile_id=profile_id, worksheet_id=worksheet_id, like=like)
         session.add(to_bd)
         session.commit()
 
@@ -37,6 +38,18 @@ def check_user(engine, profile_id, worksheet_id):
         return True if from_bd else False
 
 
+def get_likes_list(profile_id):
+    with Session(engine) as session:
+        query = session.query(Viewed.worksheet_id).filter(
+            Viewed.profile_id == profile_id,
+            Viewed.like == True).all()
+        likes_list = []
+        for worksheet in query:
+            likes_list.append(*worksheet)
+        return likes_list
+
+
+
 if __name__ == '__main__':
     pass
     # drop_database(db_url_object)
@@ -45,3 +58,4 @@ if __name__ == '__main__':
     # # add_user(engine, 2113, 124512)
     # res = check_user(engine, 2113, 1245121)
     # print(res)
+
