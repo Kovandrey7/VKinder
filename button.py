@@ -42,5 +42,7 @@ def next_button():
     keyboard = VkKeyboard()
     keyboard.add_button("Следующая избранная анкета")
     keyboard.add_line()
+    keyboard.add_button("Удалить анкету из избранного")
+    keyboard.add_line()
     keyboard.add_button("Закончить просмотр избранных анкет")
     return keyboard

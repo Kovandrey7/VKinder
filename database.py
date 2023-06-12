@@ -29,6 +29,14 @@ def add_user(engine, profile_id, worksheet_id, like=False):
         session.commit()
 
 
+def delete_like(engine, profile_id, worksheet_id):
+    with Session(engine) as session:
+        session.query(Viewed).filter(Viewed.like == True,
+                                     Viewed.worksheet_id == worksheet_id,
+                                     Viewed.profile_id == profile_id
+                                     ).update({'like': False})
+        session.commit()
+
 def check_user(engine, profile_id, worksheet_id):
     with Session(engine) as session:
         from_bd = session.query(Viewed).filter(

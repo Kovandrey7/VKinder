@@ -108,7 +108,7 @@ class VKBot:
                                 break
                     self.start_dialog = False
 
-                elif self.start_dialog is False and (request == "поиск новых анкет" or request == "продолжить поиск"):
+                elif self.start_dialog is False and request == "поиск новых анкет":
                     self.write_msg(user_id=user_id,
                                    message="Начинаю поиск анкет"
                                    )
@@ -142,13 +142,16 @@ class VKBot:
                                                message="Анкета добавлена в избранное"
                                                )
                                 break
+
                             elif request == "пропустить":
                                 add_user(engine, event.user_id, worksheet["id"])
                                 break
+
                             else:
                                 self.write_msg(user_id=user_id,
                                                message=f"Не понимаю команду, воспользуйтесь кнопками."
                                                )
+
                     keyboard = self.search_button
                     self.write_msg(user_id=user_id,
                                    message="Продолжить поиск?",
@@ -169,6 +172,7 @@ class VKBot:
                                        message="Выбери нужное действие!",
                                        keyboard=keyboard
                                        )
+
                         for event in self.longpoll.listen():
                             if event.type == VkEventType.MESSAGE_NEW and event.to_me:
                                 request = event.text.lower()
@@ -177,10 +181,12 @@ class VKBot:
                                     if likes_list:
                                         worksheet_id = likes_list.pop()
                                         attachment = self.get_photo_string_for_likes(worksheet_id)
+                                        keyboard = self.next_button
                                         self.write_msg(user_id=user_id,
                                                        message=f"Cсылка VK: vk.com/id{worksheet_id}",
                                                        attachment=attachment, keyboard=keyboard
                                                        )
+
                                     else:
                                         keyboard = self.search_button
                                         self.write_msg(user_id=user_id,
@@ -190,6 +196,32 @@ class VKBot:
                                                        )
                                         break
 
+                                elif request == "удалить анкету из избранного":
+                                    delete_like(engine, event.user_id, worksheet_id)
+                                    self.write_msg(user_id=user_id,
+                                                   message="Анкета успешно удалена из избранного.")
+
+                                    if likes_list:
+                                        worksheet_id = likes_list.pop()
+                                        attachment = self.get_photo_string_for_likes(worksheet_id)
+                                        self.write_msg(user_id=user_id,
+                                                       message=f"Cсылка VK: vk.com/id{worksheet_id}",
+                                                       attachment=attachment
+                                                       )
+                                        keyboard = self.next_button
+                                        self.write_msg(user_id=user_id,
+                                                       message="Выбери нужное действие!",
+                                                       keyboard=keyboard
+                                                       )
+
+                                    else:
+                                        keyboard = self.search_button
+                                        self.write_msg(user_id=user_id,
+                                                       message=f"Избранные анкеты анкеты закончились.\n"
+                                                               f"Начать поиск новых анкет?",
+                                                       keyboard=keyboard
+                                                       )
+                                        break
 
                                 elif request == "закончить просмотр избранных анкет":
                                     keyboard = self.search_button
@@ -210,7 +242,6 @@ class VKBot:
                                        message="Отстутствуют избранные анкеты, для продолжения выбери нужное действие!",
                                        keyboard=keyboard
                                        )
-
 
                 elif request == "завершить":
                     keyboard = self.start_over_button
